@@ -388,7 +388,7 @@ export const CHARACTERS: Character[] = [
     quote: "Say my name!",
     source: "Shazam!",
     genre: "Superhero Action",
-    imageUrl: "https://images.unsplash.com/photo-1599232995246-58f1a02e8a1d?w=500&h=500&fit=crop", // Lightning/thunder bolt (clue)
+    imageUrl: "https://upload.wikimedia.org/wikipedia/en/d/dd/WizardShazamGaryFrank.jpg", // Lightning/thunder bolt (clue)
     characterImageUrl: "https://upload.wikimedia.org/wikipedia/en/d/d5/Billy_Batson%2C_Shazam_Captain_Marvel_%28Modern%29.png", // Shazam with lightning
     attributes: {
       alignment: "hero",
@@ -405,7 +405,7 @@ export const CHARACTERS: Character[] = [
     quote: "Maximum effort!",
     source: "Deadpool",
     genre: "Superhero Action",
-    imageUrl: "https://images.unsplash.com/photo-1533158326339-7f3cf2404354?w=500&h=500&fit=crop", // Katanas/swords (clue)
+    imageUrl: "https://previews.123rf.com/images/viktorijareut/viktorijareut1508/viktorijareut150800330/44024673-two-crossed-katana-swords-vector-illustration-samurai-sword-traditional-asian-ninja-weapon.jpg", // Katanas/swords (clue)
     characterImageUrl: "https://upload.wikimedia.org/wikipedia/en/2/23/Deadpool_%282016_poster%29.png", // Deadpool in costume
     attributes: {
       alignment: "anti-hero",
