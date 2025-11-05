@@ -655,3 +655,151 @@ export const handleMLDTInfo: RequestHandler = async (_req, res) => {
     });
   }
 };
+
+// ===== ARTIFICIAL NEURAL NETWORK (ANN) ENDPOINTS =====
+
+/**
+ * POST /api/ml/train-ann
+ * Train the ANN classifier and regressor
+ * 
+ * Body:
+ *   {
+ *     "hidden_layers": [256, 128, 64],  // optional
+ *     "max_iter": 300,                   // optional
+ *     "learning_rate": 0.001             // optional
+ *   }
+ */
+export const handleMLTrainANN: RequestHandler = async (req, res) => {
+  try {
+    const { hidden_layers, max_iter, learning_rate } = req.body;
+    
+    const mlResponse = await fetch('http://localhost:5000/train-ann', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hidden_layers, max_iter, learning_rate })
+    });
+    
+    if (!mlResponse.ok) {
+      throw new Error(`ML service returned ${mlResponse.status}`);
+    }
+    
+    const data = await mlResponse.json();
+    res.json(data);
+    
+  } catch (error) {
+    console.error("ML ANN training error:", error);
+    res.status(503).json({ 
+      success: false,
+      error: 'ML service unavailable' 
+    });
+  }
+};
+
+/**
+ * POST /api/ml/predict-ann
+ * Predict character using ANN
+ * 
+ * Body:
+ *   {
+ *     "character": { name, quote, universe, genre, powers, description, source },
+ *     "top_k": 5  // optional
+ *   }
+ */
+export const handleMLPredictANN: RequestHandler = async (req, res) => {
+  try {
+    const { character, top_k } = req.body;
+    
+    if (!character) {
+      return res.status(400).json({
+        success: false,
+        error: 'Character data is required'
+      });
+    }
+    
+    const mlResponse = await fetch('http://localhost:5000/predict-ann', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ character, top_k })
+    });
+    
+    if (!mlResponse.ok) {
+      throw new Error(`ML service returned ${mlResponse.status}`);
+    }
+    
+    const data = await mlResponse.json();
+    res.json(data);
+    
+  } catch (error) {
+    console.error("ML ANN prediction error:", error);
+    res.status(503).json({ 
+      success: false,
+      error: 'ML service unavailable' 
+    });
+  }
+};
+
+/**
+ * POST /api/ml/predict-difficulty-ann
+ * Predict difficulty using ANN regressor
+ * 
+ * Body:
+ *   {
+ *     "character": { name, quote, universe, genre, powers, description, source }
+ *   }
+ */
+export const handleMLPredictDifficultyANN: RequestHandler = async (req, res) => {
+  try {
+    const { character } = req.body;
+    
+    if (!character) {
+      return res.status(400).json({
+        success: false,
+        error: 'Character data is required'
+      });
+    }
+    
+    const mlResponse = await fetch('http://localhost:5000/predict-difficulty-ann', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ character })
+    });
+    
+    if (!mlResponse.ok) {
+      throw new Error(`ML service returned ${mlResponse.status}`);
+    }
+    
+    const data = await mlResponse.json();
+    res.json(data);
+    
+  } catch (error) {
+    console.error("ML ANN difficulty prediction error:", error);
+    res.status(503).json({ 
+      success: false,
+      error: 'ML service unavailable' 
+    });
+  }
+};
+
+/**
+ * GET /api/ml/ann-info
+ * Get information about the ANN models
+ */
+export const handleMLANNInfo: RequestHandler = async (_req, res) => {
+  try {
+    const mlResponse = await fetch('http://localhost:5000/ann-info');
+    
+    if (!mlResponse.ok) {
+      throw new Error(`ML service returned ${mlResponse.status}`);
+    }
+    
+    const data = await mlResponse.json();
+    res.json(data);
+    
+  } catch (error) {
+    console.error("ML ANN info error:", error);
+    res.status(503).json({ 
+      success: false,
+      error: 'ML service unavailable' 
+    });
+  }
+};

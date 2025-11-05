@@ -5,6 +5,7 @@ Flask API server for Machine Learning Models:
 - Naive Bayes Genre/Universe Classification
 - SVM Character Classification
 - Decision Tree Classification & Regression
+- Artificial Neural Network (ANN) Classification & Regression
 
 Provides REST API endpoints that the Express server can call
 to get ML-powered character predictions and analysis.
@@ -17,6 +18,7 @@ from linear_regression_model import CharacterDifficultyPredictor
 from naive_bayes_model import CharacterNaiveBayes
 from svm_model import CharacterSVM
 from decision_tree_model import CharacterDecisionTree
+from ann_model import CharacterANN
 import json
 import os
 
@@ -29,6 +31,7 @@ lr_model = None
 nb_model = None
 svm_model = None
 dt_model = None
+ann_model = None
 
 
 def load_characters_from_typescript():
@@ -115,9 +118,14 @@ def health_check():
                 'loaded': dt_model is not None,
                 'trained_classifier': dt_model is not None and dt_model.is_trained_classifier,
                 'trained_regressor': dt_model is not None and dt_model.is_trained_regressor
+            },
+            'ann': {
+                'loaded': ann_model is not None,
+                'trained_classifier': ann_model is not None and ann_model.is_trained_classifier,
+                'trained_regressor': ann_model is not None and ann_model.is_trained_regressor
             }
         },
-        'service': 'ML Character Analysis (K-NN + LR + Naive Bayes + SVM + Decision Tree)'
+        'service': 'ML Character Analysis (K-NN + LR + Naive Bayes + SVM + Decision Tree + ANN)'
     })
 
 
@@ -1054,6 +1062,187 @@ def get_dt_info():
         }), 500
 
 
+# ===== ARTIFICIAL NEURAL NETWORK (ANN) ENDPOINTS =====
+
+@app.route('/train-ann', methods=['POST'])
+def train_ann():
+    """
+    Train the ANN (Artificial Neural Network) classifier and regressor
+    
+    Body (optional):
+        {
+            "characters": [...],          // Optional: custom training data
+            "hidden_layers": [256, 128, 64],  // Optional: network architecture
+            "max_iter": 300,              // Optional: max training iterations
+            "learning_rate": 0.001        // Optional: initial learning rate
+        }
+    """
+    global ann_model
+    
+    try:
+        data = request.get_json() or {}
+        characters = data.get('characters') or load_characters_from_typescript()
+        hidden_layers = tuple(data.get('hidden_layers', [256, 128, 64]))
+        max_iter = data.get('max_iter', 300)
+        learning_rate = data.get('learning_rate', 0.001)
+        
+        # Create and train model
+        ann_model = CharacterANN(
+            hidden_layers=hidden_layers,
+            max_iter=max_iter,
+            learning_rate=learning_rate
+        )
+        metrics = ann_model.train(characters)
+        
+        # Save model
+        ann_model.save_model('ann_model.pkl')
+        
+        return jsonify({
+            'success': True,
+            'message': 'ANN models trained successfully',
+            'metrics': metrics
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/predict-ann', methods=['POST'])
+def predict_ann_character():
+    """
+    Predict character using ANN classifier
+    
+    Body:
+        {
+            "character": {
+                "name": "Spider-Man",
+                "quote": "With great power...",
+                "universe": "Marvel",
+                "genre": "Superhero Action",
+                "powers": ["web-slinging", "spider-sense"],
+                "description": "A hero with spider abilities",
+                "source": "Spider-Man"
+            },
+            "top_k": 5  // optional, default 5
+        }
+    """
+    global ann_model
+    
+    if ann_model is None or not ann_model.is_trained_classifier:
+        return jsonify({
+            'success': False,
+            'error': 'ANN classifier not trained. Call /train-ann first.'
+        }), 400
+    
+    try:
+        data = request.get_json()
+        character = data.get('character')
+        top_k = data.get('top_k', 5)
+        
+        if not character:
+            return jsonify({
+                'success': False,
+                'error': 'Character data is required'
+            }), 400
+        
+        # Predict
+        predictions = ann_model.predict_character(character, top_k)
+        
+        return jsonify({
+            'success': True,
+            'predictions': predictions
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/predict-difficulty-ann', methods=['POST'])
+def predict_difficulty_ann():
+    """
+    Predict difficulty using ANN regressor
+    
+    Body:
+        {
+            "character": {
+                "name": "Spider-Man",
+                "quote": "With great power...",
+                "universe": "Marvel",
+                "genre": "Superhero Action",
+                "powers": ["web-slinging", "spider-sense"],
+                "description": "A hero with spider abilities",
+                "source": "Spider-Man"
+            }
+        }
+    """
+    global ann_model
+    
+    if ann_model is None or not ann_model.is_trained_regressor:
+        return jsonify({
+            'success': False,
+            'error': 'ANN regressor not trained. Call /train-ann first.'
+        }), 400
+    
+    try:
+        data = request.get_json()
+        character = data.get('character')
+        
+        if not character:
+            return jsonify({
+                'success': False,
+                'error': 'Character data is required'
+            }), 400
+        
+        # Predict difficulty
+        difficulty = ann_model.predict_difficulty(character)
+        
+        return jsonify({
+            'success': True,
+            'difficulty': difficulty,
+            'character_name': character.get('name', 'Unknown')
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/ann-info', methods=['GET'])
+def get_ann_info():
+    """
+    Get information about the ANN models
+    """
+    global ann_model
+    
+    if ann_model is None:
+        return jsonify({
+            'success': False,
+            'error': 'ANN model not loaded'
+        }), 400
+    
+    try:
+        info = ann_model.get_model_info()
+        
+        return jsonify({
+            'success': True,
+            'model_info': info
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 if __name__ == '__main__':
     print("=" * 60)
     print("ML Character Prediction API Server")
@@ -1089,6 +1278,11 @@ if __name__ == '__main__':
     print("  GET  /dt-rules          - Get human-readable decision rules")
     print("  GET  /dt-visualize      - Get tree visualization (PNG)")
     print("  GET  /dt-info           - Get Decision Tree model info")
+    print("\nArtificial Neural Network (ANN) Endpoints:")
+    print("  POST /train-ann         - Train ANN classifier & regressor")
+    print("  POST /predict-ann       - Predict character using ANN")
+    print("  POST /predict-difficulty-ann - Predict difficulty using ANN")
+    print("  GET  /ann-info          - Get ANN model info")
     print("=" * 60)
     
     # Auto-train on startup
@@ -1122,6 +1316,12 @@ if __name__ == '__main__':
         dt_metrics = dt_model.train(characters)
         dt_model.save_model('decision_tree_model.pkl')
         print(f"✓ Decision Tree model ready! (Classifier: {dt_metrics['classifier']['test_accuracy']:.2%}, Regressor R²: {dt_metrics['regressor']['test_r2']:.4f})")
+        
+        # Train Artificial Neural Network
+        ann_model = CharacterANN(hidden_layers=(256, 128, 64), max_iter=300)
+        ann_metrics = ann_model.train(characters)
+        ann_model.save_model('ann_model.pkl')
+        print(f"✓ ANN model ready! (Classifier: {ann_metrics['classifier']['test_accuracy']:.2%}, Regressor R²: {ann_metrics['regressor']['test_r2']:.4f}, Iterations: {ann_metrics['classifier']['n_iterations']})")
         print()
     except Exception as e:
         print(f"⚠ Could not auto-train models: {e}")

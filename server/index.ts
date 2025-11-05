@@ -26,7 +26,11 @@ import {
   handleMLDTFeatureImportance,
   handleMLDTRules,
   handleMLDTVisualize,
-  handleMLDTInfo
+  handleMLDTInfo,
+  handleMLTrainANN,
+  handleMLPredictANN,
+  handleMLPredictDifficultyANN,
+  handleMLANNInfo
 } from "./routes/ml";
 
 export function createServer() {
@@ -80,6 +84,12 @@ export function createServer() {
   app.get("/api/ml/dt-rules", handleMLDTRules);
   app.get("/api/ml/dt-visualize", handleMLDTVisualize);
   app.get("/api/ml/dt-info", handleMLDTInfo);
+  
+  // ML API routes - Artificial Neural Network (ANN)
+  app.post("/api/ml/train-ann", handleMLTrainANN);
+  app.post("/api/ml/predict-ann", handleMLPredictANN);
+  app.post("/api/ml/predict-difficulty-ann", handleMLPredictDifficultyANN);
+  app.get("/api/ml/ann-info", handleMLANNInfo);
 
   return app;
 }
