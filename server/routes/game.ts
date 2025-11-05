@@ -63,3 +63,30 @@ export const handleGetTodayGame: RequestHandler = (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
+/**
+ * POST /api/game/reveal-answer
+ * Reveal the correct answer (user gives up)
+ */
+export const handleRevealAnswer: RequestHandler = (req, res) => {
+  try {
+    const sessionId = req.headers["x-session-id"] as string || "default-session";
+    
+    const state = getGameState(sessionId);
+    const dailyCharacter = getCharacterById(state.characterId);
+    
+    if (!dailyCharacter) {
+      return res.status(500).json({ error: "Character not found" });
+    }
+    
+    console.log(`[Reveal Answer] Session: ${sessionId} revealed answer: ${dailyCharacter.name}`);
+    
+    res.json({
+      success: true,
+      character: dailyCharacter
+    });
+  } catch (error) {
+    console.error("Error revealing answer:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};

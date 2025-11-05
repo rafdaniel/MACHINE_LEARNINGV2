@@ -1243,6 +1243,143 @@ def get_ann_info():
         }), 500
 
 
+@app.route('/find-similar', methods=['POST'])
+def find_similar_characters():
+    """
+    Find similar characters using K-NN based on universe, attributes, and powers
+    
+    Expects JSON body:
+    {
+        "character_id": "iron-man",
+        "top_k": 5  (optional, defaults to 5)
+    }
+    
+    Returns:
+    {
+        "success": true,
+        "source_character": {...},
+        "similar_characters": [
+            {
+                "id": "...",
+                "name": "...",
+                "similarity": 0.95,
+                "shared_attributes": ["universe", "powers"],
+                "character": {...full character data...}
+            }
+        ]
+    }
+    """
+    global knn_model
+    
+    if knn_model is None:
+        return jsonify({
+            'success': False,
+            'error': 'K-NN model not initialized. Train the model first.'
+        }), 500
+    
+    data = request.get_json()
+    character_id = data.get('character_id')
+    top_k = data.get('top_k', 5)
+    
+    if not character_id:
+        return jsonify({
+            'success': False,
+            'error': 'character_id is required'
+        }), 400
+    
+    try:
+        print(f"\n🔍 Finding similar characters to: {character_id}")
+        
+        # Find the source character
+        characters = load_characters_from_typescript()
+        source_character = next((c for c in characters if c.get('id') == character_id), None)
+        
+        if not source_character:
+            return jsonify({
+                'success': False,
+                'error': f'Character with id "{character_id}" not found'
+            }), 404
+        
+        print(f"✓ Source character: {source_character.get('name')}")
+        
+        # Use K-NN to find similar characters
+        similar_results = knn_model.find_similar_characters(
+            character_id=character_id,
+            top_k=top_k
+        )
+        
+        print(f"✓ Found {len(similar_results)} similar characters")
+        
+        # Format the response
+        similar_characters = []
+        for result in similar_results:
+            # Get full character data
+            char = next((c for c in characters if c.get('name') == result['name']), None)
+            if char:
+                similar_characters.append({
+                    'id': char.get('id', ''),
+                    'name': result['name'],
+                    'similarity': round(result['similarity'] * 100, 1),  # Convert to percentage
+                    'distance': result.get('distance', 0),
+                    'shared_attributes': analyze_shared_attributes(source_character, char),
+                    'character': char
+                })
+        
+        return jsonify({
+            'success': True,
+            'source_character': source_character,
+            'similar_characters': similar_characters,
+            'algorithm': 'K-Nearest Neighbors',
+            'message': f'Found {len(similar_characters)} similar characters'
+        })
+    
+    except Exception as e:
+        print(f"❌ Error finding similar characters: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+def analyze_shared_attributes(char1, char2):
+    """
+    Analyze which attributes are shared between two characters
+    """
+    shared = []
+    
+    # Check universe
+    if char1.get('universe') == char2.get('universe'):
+        shared.append(f"Same universe: {char1.get('universe')}")
+    
+    # Check genre
+    if char1.get('genre') == char2.get('genre'):
+        shared.append(f"Same genre: {char1.get('genre')}")
+    
+    # Check alignment
+    alignment1 = char1.get('attributes', {}).get('alignment')
+    alignment2 = char2.get('attributes', {}).get('alignment')
+    if alignment1 and alignment2 and alignment1 == alignment2:
+        shared.append(f"Both are {alignment1}s")
+    
+    # Check team
+    team1 = char1.get('attributes', {}).get('team')
+    team2 = char2.get('attributes', {}).get('team')
+    if team1 and team2 and team1 == team2:
+        shared.append(f"Both in {team1}")
+    
+    # Check powers overlap
+    powers1 = set(char1.get('attributes', {}).get('powers', []))
+    powers2 = set(char2.get('attributes', {}).get('powers', []))
+    common_powers = powers1.intersection(powers2)
+    if common_powers:
+        shared.append(f"Shared powers: {', '.join(list(common_powers)[:3])}")
+    
+    return shared if shared else ["Similar characteristics"]
+
+
 if __name__ == '__main__':
     print("=" * 60)
     print("ML Character Prediction API Server")

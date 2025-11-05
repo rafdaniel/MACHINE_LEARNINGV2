@@ -103,3 +103,19 @@ export interface CharacterListResponse {
     aliases: string[];
   }>;
 }
+
+/**
+ * ML Hint System interfaces
+ */
+export interface MLHint {
+  character: string;
+  confidence: number;
+  source: 'knn' | 'svm' | 'decision_tree' | 'ann' | 'multiple';
+}
+
+export interface MLHintResponse {
+  success: boolean;
+  hints: MLHint[];
+  message: string;
+  error?: string;
+}

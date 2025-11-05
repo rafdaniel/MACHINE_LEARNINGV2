@@ -179,6 +179,65 @@ class CharacterKNN:
         self.knn.fit(self.feature_vectors)
         
         print(f"✓ Model loaded from {filepath}")
+    
+    def find_similar_characters(self, character_id: str, top_k: int = 5) -> List[Dict]:
+        """
+        Find similar characters based on their features using K-NN
+        
+        Args:
+            character_id: The ID of the source character
+            top_k: Number of similar characters to return
+            
+        Returns:
+            List of similar characters with similarity scores
+        """
+        if self.knn is None or len(self.characters) == 0:
+            raise ValueError("Model not trained. Call train() first.")
+        
+        # Find the source character
+        source_idx = None
+        for idx, char in enumerate(self.characters):
+            if char.get('id') == character_id:
+                source_idx = idx
+                break
+        
+        if source_idx is None:
+            raise ValueError(f"Character with id '{character_id}' not found in training data")
+        
+        # Get the feature vector of the source character
+        source_features = self.feature_vectors[source_idx].reshape(1, -1)
+        
+        # Find k+1 nearest neighbors (including the character itself)
+        distances, indices = self.knn.kneighbors(
+            source_features,
+            n_neighbors=min(top_k + 1, len(self.characters))
+        )
+        
+        results = []
+        for dist, idx in zip(distances[0], indices[0]):
+            # Skip the source character itself
+            if idx == source_idx:
+                continue
+            
+            char = self.characters[idx]
+            # Convert cosine distance to similarity score (0-1)
+            # Cosine distance = 1 - cosine similarity
+            similarity = 1 - dist
+            
+            results.append({
+                'name': char.get('name', 'Unknown'),
+                'id': char.get('id', ''),
+                'similarity': float(similarity),
+                'distance': float(dist),
+                'universe': char.get('universe', ''),
+                'genre': char.get('genre', ''),
+                'quote': char.get('quote', '')
+            })
+            
+            if len(results) >= top_k:
+                break
+        
+        return results
 
 
 def load_characters_from_json(json_path: str) -> List[Dict]:

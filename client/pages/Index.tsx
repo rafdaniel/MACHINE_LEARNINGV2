@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import ParticlesBackground from "@/components/ParticlesBackground";
 import GameHeader from "@/components/GameHeader";
 import CluePanel from "@/components/CluePanel";
 import AutocompleteInput from "@/components/AutocompleteInput";
+import MLHintSystem from "@/components/MLHintSystem";
+import CharacterSimilarityExplorer from "@/components/CharacterSimilarityExplorer";
 import { TodayGameResponse, GuessResponse } from "@shared/api";
 import { useToast } from "@/hooks/use-toast";
 
@@ -10,7 +12,11 @@ export default function Index() {
   const [gameState, setGameState] = useState<TodayGameResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hintCharacter, setHintCharacter] = useState<string>("");
+  const [correctAnswer, setCorrectAnswer] = useState<string | null>(null);
+  const [revealedCharacterId, setRevealedCharacterId] = useState<string | null>(null);
   const { toast } = useToast();
+  const inputRef = useRef<any>(null);
 
   // Generate or get session ID
   const getSessionId = () => {
@@ -71,6 +77,54 @@ export default function Index() {
     });
   };
 
+  // Handle hint selection from ML system
+  const handleHintSelect = (character: string) => {
+    setHintCharacter(character);
+    toast({
+      title: "💡 Hint Selected",
+      description: `"${character}" has been filled in. Click Submit to guess!`,
+      variant: "default",
+    });
+    // Scroll to input
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Handle revealing the answer
+  const handleRevealAnswer = async () => {
+    try {
+      const sessionId = getSessionId();
+      const response = await fetch("/api/game/reveal-answer", {
+        method: "POST",
+        headers: {
+          "X-Session-Id": sessionId,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to reveal answer");
+      }
+
+      const data = await response.json();
+      if (data.success && data.character) {
+        setCorrectAnswer(data.character.name);
+        setRevealedCharacterId(data.character.id); // Store character ID for similarity explorer
+      }
+
+      toast({
+        title: "Answer Revealed",
+        description: `The character is ${data.character.name}!`,
+        variant: "default",
+      });
+    } catch (error) {
+      console.error("Error revealing answer:", error);
+      toast({
+        title: "Error",
+        description: "Failed to reveal answer",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleGuessSubmit = async (guess: string) => {
     if (!gameState || gameState.isComplete || isSubmitting) return;
     
@@ -93,6 +147,9 @@ export default function Index() {
       }
       
       const data: GuessResponse = await response.json();
+      
+      // Clear hint after submission
+      setHintCharacter("");
       
       // Refresh game state to get updated clues
       await fetchGameState();
@@ -167,6 +224,20 @@ export default function Index() {
               incorrectGuesses={incorrectGuesses}
               clues={gameState.clues}
             />
+
+            {/* ML Hint System - Appears after 4 incorrect guesses */}
+            {!gameState.isComplete && (
+              <div className="mb-8">
+                <MLHintSystem
+                  incorrectGuesses={incorrectGuesses}
+                  quote={gameState.clues.quote}
+                  source={gameState.clues.source}
+                  correctAnswer={correctAnswer}
+                  onHintSelect={handleHintSelect}
+                  onRevealAnswer={handleRevealAnswer}
+                />
+              </div>
+            )}
 
             {/* Game Status */}
             <div className="mb-8 text-center">
@@ -268,11 +339,30 @@ export default function Index() {
               </div>
             )}
 
+            {/* Character Similarity Explorer - Shows after winning OR when answer is revealed */}
+            {((gameState.isComplete && gameState.isWon && gameState.revealedCharacter) || (correctAnswer && revealedCharacterId)) && (
+              <div className="relative z-20 mb-8">
+                <CharacterSimilarityExplorer
+                  characterId={gameState.revealedCharacter?.id || revealedCharacterId || ""}
+                  characterName={gameState.revealedCharacter?.name || correctAnswer || ""}
+                  onPlayCharacter={(charId) => {
+                    console.log("Play character:", charId);
+                    toast({
+                      title: "Feature Coming Soon",
+                      description: "Direct character selection will be available in the next update!",
+                      variant: "default",
+                    });
+                  }}
+                />
+              </div>
+            )}
+
             {/* Input Section */}
             <div className="mb-8">
               <AutocompleteInput
                 onSubmit={handleGuessSubmit}
                 disabled={gameState.isComplete || isSubmitting}
+                defaultValue={hintCharacter}
               />
             </div>
 

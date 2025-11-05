@@ -803,3 +803,253 @@ export const handleMLANNInfo: RequestHandler = async (_req, res) => {
     });
   }
 };
+
+/**
+ * POST /api/ml/get-hints
+ * Get ML-powered hints based on available clues
+ * Uses all 4 character prediction algorithms to suggest top candidates
+ * 
+ * Body:
+ *   {
+ *     "character": {
+ *       "quote": "...",
+ *       "source": "...",
+ *       "universe": "...",
+ *       "genre": "...",
+ *       "description": "..."
+ *     }
+ *   }
+ */
+export const handleMLGetHints: RequestHandler = async (req, res) => {
+  try {
+    const { character } = req.body;
+    
+    if (!character) {
+      return res.status(400).json({
+        success: false,
+        error: 'Character data is required'
+      });
+    }
+
+    console.log('🔍 [ML Hints] Received character data:', character);
+
+    // Enhance character data with more context for better ML predictions
+    const enhancedCharacter = {
+      ...character,
+      // Combine all available text for better analysis
+      description: character.description || `${character.quote || ''} ${character.source || ''}`.trim(),
+      // Ensure all fields have values
+      name: character.name || 'Unknown',
+      quote: character.quote || '',
+      universe: character.universe || 'Unknown',
+      genre: character.genre || 'Unknown',
+      powers: character.powers || [],
+      source: character.source || 'Unknown'
+    };
+
+    console.log('✨ [ML Hints] Enhanced character data:', enhancedCharacter);
+
+    // Call all 4 character prediction algorithms in parallel
+    const [knnRes, svmRes, dtRes, annRes] = await Promise.allSettled([
+      fetch('http://localhost:5000/predict-knn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ character: enhancedCharacter, top_k: 5 })
+      }),
+      fetch('http://localhost:5000/predict-svm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ character: enhancedCharacter, top_k: 5 })
+      }),
+      fetch('http://localhost:5000/predict-decision-tree', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ character: enhancedCharacter, top_k: 5 })
+      }),
+      fetch('http://localhost:5000/predict-ann', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ character: enhancedCharacter, top_k: 5 })
+      })
+    ]);
+
+    console.log('📡 [ML Hints] Parallel requests completed');
+
+    const hints: any[] = [];
+
+    // Process K-NN results
+    if (knnRes.status === 'fulfilled' && knnRes.value.ok) {
+      const data = await knnRes.value.json();
+      if (data.success && data.predictions) {
+        data.predictions.forEach((pred: any) => {
+          hints.push({
+            character: pred.character,
+            confidence: pred.similarity,
+            source: 'knn'
+          });
+        });
+      }
+    }
+
+    // Process SVM results
+    if (svmRes.status === 'fulfilled' && svmRes.value.ok) {
+      const data = await svmRes.value.json();
+      if (data.success && data.predictions) {
+        data.predictions.forEach((pred: any) => {
+          hints.push({
+            character: pred.character,
+            confidence: pred.confidence,
+            source: 'svm'
+          });
+        });
+      }
+    }
+
+    // Process Decision Tree results
+    if (dtRes.status === 'fulfilled' && dtRes.value.ok) {
+      const data = await dtRes.value.json();
+      if (data.success && data.predictions) {
+        data.predictions.forEach((pred: any) => {
+          hints.push({
+            character: pred.character,
+            confidence: pred.probability,
+            source: 'decision_tree'
+          });
+        });
+      }
+    }
+
+    // Process ANN results
+    if (annRes.status === 'fulfilled' && annRes.value.ok) {
+      const data = await annRes.value.json();
+      if (data.success && data.predictions) {
+        data.predictions.forEach((pred: any) => {
+          hints.push({
+            character: pred.character,
+            confidence: pred.probability,
+            source: 'ann'
+          });
+        });
+      }
+    }
+
+    // Aggregate and rank hints by character name
+    const characterScores = new Map<string, { totalConfidence: number, count: number, sources: string[] }>();
+    
+    hints.forEach(hint => {
+      const existing = characterScores.get(hint.character);
+      if (existing) {
+        existing.totalConfidence += hint.confidence;
+        existing.count += 1;
+        existing.sources.push(hint.source);
+      } else {
+        characterScores.set(hint.character, {
+          totalConfidence: hint.confidence,
+          count: 1,
+          sources: [hint.source]
+        });
+      }
+    });
+
+    // Calculate weighted average and sort
+    const rankedHints = Array.from(characterScores.entries())
+      .map(([character, stats]) => ({
+        character,
+        confidence: stats.totalConfidence / stats.count,
+        agreementCount: stats.count,
+        sources: stats.sources
+      }))
+      .sort((a, b) => {
+        // Sort by agreement count first (more algorithms agree = better)
+        if (b.agreementCount !== a.agreementCount) {
+          return b.agreementCount - a.agreementCount;
+        }
+        // Then by average confidence
+        return b.confidence - a.confidence;
+      })
+      .slice(0, 5) // Top 5 hints
+      .map(hint => ({
+        character: hint.character,
+        confidence: hint.confidence,
+        source: hint.agreementCount > 1 ? 'multiple' : hint.sources[0]
+      }));
+
+    res.json({
+      success: true,
+      hints: rankedHints,
+      message: rankedHints.length > 0 
+        ? `AI suggests ${rankedHints.length} possible characters based on available clues`
+        : 'Not enough clues available for AI hints yet'
+    });
+
+  } catch (error) {
+    console.error("ML hint error:", error);
+    res.status(503).json({
+      success: false,
+      error: 'ML service unavailable. Make sure Python service is running on port 5000.',
+      hints: []
+    });
+  }
+};
+
+/**
+ * POST /api/ml/find-similar-characters
+ * Find similar characters using K-NN based on universe, attributes, and powers
+ * 
+ * Body:
+ *   {
+ *     "characterId": "string",
+ *     "top_k": 5
+ *   }
+ */
+export const handleFindSimilarCharacters: RequestHandler = async (req, res) => {
+  try {
+    const { characterId, top_k = 5 } = req.body;
+
+    console.log(`🔍 [Similar Characters] Finding similar to: ${characterId}`);
+
+    if (!characterId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Character ID is required'
+      });
+    }
+
+    // Call Python ML service K-NN endpoint for similarity
+    const mlResponse = await fetch('http://localhost:5000/find-similar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        character_id: characterId,
+        top_k: top_k 
+      })
+    });
+
+    console.log(`📡 [Similar Characters] ML service response status: ${mlResponse.status}`);
+
+    if (!mlResponse.ok) {
+      const errorText = await mlResponse.text();
+      console.error(`❌ [Similar Characters] ML service error:`, errorText);
+      throw new Error(`ML service returned ${mlResponse.status}`);
+    }
+
+    const data = await mlResponse.json();
+    console.log(`✅ [Similar Characters] Found ${data.similar_characters?.length || 0} similar characters`);
+
+    res.json({
+      success: true,
+      similarCharacters: data.similar_characters || [],
+      sourceCharacter: data.source_character || null,
+      algorithm: 'K-NN',
+      message: `Found ${data.similar_characters?.length || 0} similar characters using K-Nearest Neighbors`
+    });
+
+  } catch (error) {
+    console.error("❌ [Similar Characters] Error:", error);
+    res.status(503).json({
+      success: false,
+      error: 'ML service unavailable. Make sure Python service is running on port 5000.',
+      similarCharacters: []
+    });
+  }
+};

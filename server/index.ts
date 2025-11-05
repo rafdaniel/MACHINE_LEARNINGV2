@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { handleDemo } from "./routes/demo";
-import { handleGetTodayGame } from "./routes/game";
+import { handleGetTodayGame, handleRevealAnswer } from "./routes/game";
 import { handleGuess } from "./routes/guess";
 import { handleGetCharacters } from "./routes/characters";
 import { 
@@ -30,7 +30,9 @@ import {
   handleMLTrainANN,
   handleMLPredictANN,
   handleMLPredictDifficultyANN,
-  handleMLANNInfo
+  handleMLANNInfo,
+  handleMLGetHints,
+  handleFindSimilarCharacters
 } from "./routes/ml";
 
 export function createServer() {
@@ -52,6 +54,7 @@ export function createServer() {
   // Game API routes
   app.get("/api/game/today", handleGetTodayGame);
   app.post("/api/game/guess", handleGuess);
+  app.post("/api/game/reveal-answer", handleRevealAnswer);
   app.get("/api/characters", handleGetCharacters);
 
   // ML API routes - K-NN
@@ -90,6 +93,12 @@ export function createServer() {
   app.post("/api/ml/predict-ann", handleMLPredictANN);
   app.post("/api/ml/predict-difficulty-ann", handleMLPredictDifficultyANN);
   app.get("/api/ml/ann-info", handleMLANNInfo);
+  
+  // ML API routes - Hint System
+  app.post("/api/ml/get-hints", handleMLGetHints);
+  
+  // ML API routes - Character Similarity
+  app.post("/api/ml/find-similar-characters", handleFindSimilarCharacters);
 
   return app;
 }

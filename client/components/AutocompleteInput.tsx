@@ -5,19 +5,29 @@ import { CharacterListResponse } from "@shared/api";
 interface AutocompleteInputProps {
   onSubmit: (guess: string) => void;
   disabled?: boolean;
+  defaultValue?: string;
 }
 
 export default function AutocompleteInput({
   onSubmit,
   disabled = false,
+  defaultValue = "",
 }: AutocompleteInputProps) {
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(defaultValue);
   const [allCharacters, setAllCharacters] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  // Update input when defaultValue changes (from hint system)
+  useEffect(() => {
+    if (defaultValue) {
+      setInput(defaultValue);
+      inputRef.current?.focus();
+    }
+  }, [defaultValue]);
 
   // Fetch character list on mount
   useEffect(() => {
