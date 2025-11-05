@@ -3,6 +3,7 @@ Flask API server for Machine Learning Models:
 - K-NN Character Prediction
 - Linear Regression Difficulty Analysis
 - Naive Bayes Genre/Universe Classification
+- SVM Character Classification
 
 Provides REST API endpoints that the Express server can call
 to get ML-powered character predictions and analysis.
@@ -13,6 +14,7 @@ from flask_cors import CORS
 from knn_model import CharacterKNN
 from linear_regression_model import CharacterDifficultyPredictor
 from naive_bayes_model import CharacterNaiveBayes
+from svm_model import CharacterSVM
 import json
 import os
 
@@ -23,6 +25,7 @@ CORS(app)  # Enable CORS for Express server
 knn_model = None
 lr_model = None
 nb_model = None
+svm_model = None
 
 
 def load_characters_from_typescript():
@@ -100,9 +103,13 @@ def health_check():
             'naive_bayes': {
                 'loaded': nb_model is not None,
                 'trained': nb_model is not None and nb_model.is_trained
+            },
+            'svm': {
+                'loaded': svm_model is not None,
+                'trained': svm_model is not None and svm_model.is_trained
             }
         },
-        'service': 'ML Character Analysis (K-NN + Linear Regression + Naive Bayes)'
+        'service': 'ML Character Analysis (K-NN + LR + Naive Bayes + SVM)'
     })
 
 
@@ -613,6 +620,145 @@ def get_nb_info():
         }), 500
 
 
+# ===== SVM ENDPOINTS =====
+
+@app.route('/train-svm', methods=['POST'])
+def train_svm():
+    """
+    Train the SVM classifier for character identification
+    """
+    global svm_model
+    
+    try:
+        # Get training data
+        data = request.get_json() or {}
+        characters = data.get('characters') or load_characters_from_typescript()
+        kernel = data.get('kernel', 'rbf')  # linear, rbf, poly, sigmoid
+        optimize = data.get('optimize', False)
+        
+        # Create and train model
+        svm_model = CharacterSVM(kernel=kernel, use_calibration=True)
+        metrics = svm_model.train(characters, optimize=optimize)
+        
+        # Save model
+        svm_model.save_model('svm_model.pkl')
+        
+        return jsonify({
+            'success': True,
+            'message': 'SVM model trained successfully',
+            'metrics': metrics
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/predict-svm', methods=['POST'])
+def predict_svm():
+    """
+    Predict character using SVM
+    
+    Body:
+        {
+            "text": "Character quote or description",
+            "top_k": 5  // optional, default 5
+        }
+    """
+    global svm_model
+    
+    if svm_model is None or not svm_model.is_trained:
+        return jsonify({
+            'success': False,
+            'error': 'SVM model not trained. Call /train-svm first.'
+        }), 400
+    
+    try:
+        data = request.get_json()
+        text = data.get('text')
+        top_k = data.get('top_k', 5)
+        
+        if not text:
+            return jsonify({
+                'success': False,
+                'error': 'Text is required'
+            }), 400
+        
+        # Predict
+        predictions = svm_model.predict(text, top_k)
+        
+        return jsonify({
+            'success': True,
+            'predictions': predictions,
+            'input_text': text
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/svm-feature-importance', methods=['GET'])
+def svm_feature_importance():
+    """
+    Get feature importance from SVM (linear kernel only)
+    """
+    global svm_model
+    
+    if svm_model is None or not svm_model.is_trained:
+        return jsonify({
+            'success': False,
+            'error': 'SVM model not trained. Call /train-svm first.'
+        }), 400
+    
+    try:
+        top_n = request.args.get('top_n', 20, type=int)
+        features = svm_model.get_feature_importance(top_n)
+        
+        return jsonify({
+            'success': True,
+            'features': features
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/svm-info', methods=['GET'])
+def get_svm_info():
+    """
+    Get information about the SVM model
+    """
+    global svm_model
+    
+    if svm_model is None:
+        return jsonify({
+            'success': False,
+            'error': 'SVM model not loaded'
+        }), 400
+    
+    try:
+        info = svm_model.get_model_info()
+        
+        return jsonify({
+            'success': True,
+            'model_info': info
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 if __name__ == '__main__':
     print("=" * 60)
     print("ML Character Prediction API Server")
@@ -629,12 +775,17 @@ if __name__ == '__main__':
     print("  POST /predict-difficulty- Predict character difficulty")
     print("  GET  /difficulty-rankings- Get difficulty rankings")
     print("  GET  /feature-importance - Get feature importance")
-    print("\n  Naive Bayes Endpoints:")
+    print("\nNaive Bayes Endpoints:")
     print("  POST /train-nb          - Train Naive Bayes classifier")
     print("  POST /predict-genre     - Predict character genre")
     print("  POST /predict-universe  - Predict character universe")
     print("  POST /classify-character- Full classification (genre + universe)")
     print("  GET  /nb-info           - Get Naive Bayes model info")
+    print("\nSVM Endpoints:")
+    print("  POST /train-svm         - Train SVM classifier")
+    print("  POST /predict-svm       - Predict character using SVM")
+    print("  GET  /svm-feature-importance - Get feature importance (linear kernel)")
+    print("  GET  /svm-info          - Get SVM model info")
     print("=" * 60)
     
     # Auto-train on startup
@@ -656,6 +807,12 @@ if __name__ == '__main__':
         nb_model = CharacterNaiveBayes()
         nb_metrics = nb_model.train(characters)
         print(f"✓ Naive Bayes model ready! (Genre: {nb_metrics['genre_accuracy']:.2%}, Universe: {nb_metrics['universe_accuracy']:.2%})")
+        
+        # Train SVM
+        svm_model = CharacterSVM(kernel='rbf', use_calibration=True)
+        svm_metrics = svm_model.train(characters, optimize=False)
+        svm_model.save_model('svm_model.pkl')
+        print(f"✓ SVM model ready! (Accuracy: {svm_metrics['test_accuracy']:.2%}, Support Vectors: {svm_metrics['n_support_vectors']}, Kernel: {svm_metrics['kernel']})")
         print()
     except Exception as e:
         print(f"⚠ Could not auto-train models: {e}")

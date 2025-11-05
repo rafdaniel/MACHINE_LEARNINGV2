@@ -15,7 +15,11 @@ import {
   handleMLPredictGenre,
   handleMLPredictUniverse,
   handleMLClassifyCharacter,
-  handleMLNBInfo
+  handleMLNBInfo,
+  handleMLTrainSVM,
+  handleMLPredictSVM,
+  handleMLSVMFeatureImportance,
+  handleMLSVMInfo
 } from "./routes/ml";
 
 export function createServer() {
@@ -54,6 +58,12 @@ export function createServer() {
   app.post("/api/ml/predict-universe", handleMLPredictUniverse);
   app.post("/api/ml/classify-character", handleMLClassifyCharacter);
   app.get("/api/ml/nb-info", handleMLNBInfo);
+  
+  // ML API routes - SVM
+  app.post("/api/ml/train-svm", handleMLTrainSVM);
+  app.post("/api/ml/predict-svm", handleMLPredictSVM);
+  app.get("/api/ml/svm-feature-importance", handleMLSVMFeatureImportance);
+  app.get("/api/ml/svm-info", handleMLSVMInfo);
 
   return app;
 }
